@@ -1,0 +1,27 @@
+diff --git a/src/libcharon/sa/ikev2/tasks/ike_auth.c b/src/libcharon/sa/ikev2/tasks/ike_auth.c
+index 19ecad9..9470b3c 100644
+--- a/src/libcharon/sa/ikev2/tasks/ike_auth.c
++++ b/src/libcharon/sa/ikev2/tasks/ike_auth.c
+@@ -867,11 +867,21 @@ METHOD(task_t, build_i, status_t,
+ 		cfg->purge(cfg, TRUE);
+ 
+ 		/* add (optional) IDr */
++		/* Android ePDG requests an APN while accepting an AKA-authenticated ePDG ID. */
++		char *epdg_apn = lib->settings->get_str(lib->settings,
++						"charon.plugins.androidbridge.epdg_apn", NULL);
++		if (epdg_apn)
++		{
++			identification_t *apn = identification_create_from_string(epdg_apn);
++			id_payload = id_payload_create_from_identification(PLV2_ID_RESPONDER, apn);
++			message->add_payload(message, (payload_t*)id_payload);
++			apn->destroy(apn);
++		}
+ 		cfg = get_auth_cfg(this, FALSE);
+ 		if (cfg)
+ 		{
+ 			idr = cfg->get(cfg, AUTH_RULE_IDENTITY);
+-			if (!cfg->get(cfg, AUTH_RULE_IDENTITY_LOOSE) && idr &&
++			if (!epdg_apn && !cfg->get(cfg, AUTH_RULE_IDENTITY_LOOSE) && idr &&
+ 				!idr->contains_wildcards(idr))
+ 			{
+ 				this->ike_sa->set_other_id(this->ike_sa, idr->clone(idr));

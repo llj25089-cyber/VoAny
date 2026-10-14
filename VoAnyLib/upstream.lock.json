@@ -1,0 +1,12 @@
+{
+  "lwip": {
+    "url": "https://github.com/lwip-tcpip/lwip.git",
+    "commit": "77dcd25a72509eb83f72b033d219b1d40cd8eb95",
+    "tag": "STABLE-2_2_1_RELEASE"
+  },
+  "strongswan": {
+    "url": "https://github.com/strongswan/strongswan.git",
+    "commit": "23eb1e09455f5976b9411586e5cb669798f68836",
+    "patch": "patches/strongswan-epdg-apn.patch"
+  }
+}

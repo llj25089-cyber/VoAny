@@ -1,0 +1,15 @@
+apply plugin: 'com.android.application'
+android {
+    namespace 'li.power.app.voany'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'li.power.app.voany'
+        minSdk 31
+        targetSdk 36
+        versionCode 92
+        versionName '0.2.0'
+        testInstrumentationRunner 'li.power.app.voany.SmsInstrumentation'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+dependencies { implementation project(':VoAnyLib') }
