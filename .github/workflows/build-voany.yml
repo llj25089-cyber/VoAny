@@ -73,7 +73,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             make perl jq curl git ca-certificates
 
-      -       - name: Prepare pinned upstream sources
+      - name: Prepare pinned upstream sources
         run: |
           # 安装 strongSwan 生成构建文件所需的宿主机工具。
           sudo apt-get install -y --no-install-recommends \
@@ -94,7 +94,6 @@ jobs:
           test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/crypto/proposal/proposal_keywords_static.c
           test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/settings/settings_parser.c
           test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/settings/settings_lexer.c
-        run: python VoAnyLib/prepare-upstreams.py
 
       - name: Build OpenSSL for Android arm64
         # Static OpenSSL libraries/headers are excluded from version control.
