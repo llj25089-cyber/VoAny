@@ -1,0 +1,101 @@
+name: Build VoAny Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      NDK_VERSION: '27.1.12297006'
+      OPENSSL_VERSION: '3.5.4'
+      # SHA-256 from the official OpenSSL 3.5.4 release checksum file.
+      OPENSSL_SHA256: '967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Set up Android SDK and accept licenses
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: 'true'
+          packages: 'platform-tools'
+
+      - name: Install Android SDK packages
+        # Keep 36.0.0 as requested; the existing AGP 8.9.2 defaults to 35.0.0.
+        run: |
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "build-tools;35.0.0" \
+            "ndk;${NDK_VERSION}"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install native build prerequisites
+        # The upstream OpenSSL builder runs make/Perl directly, without Docker.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make perl jq curl git ca-certificates
+
+      - name: Prepare pinned upstream sources
+        # These are not Git submodules. This script uses only Python's standard
+        # library, fetches upstream.lock.json revisions and applies the patch.
+        # OpenSSL must be built after this step and before Gradle's native build.
+        run: python VoAnyLib/prepare-upstreams.py
+
+      - name: Build OpenSSL for Android arm64
+        # Static OpenSSL libraries/headers are excluded from version control.
+        # The repository wrapper sets arm64-v8a, MIN_SDK=31 and NO_DOCKER=1.
+        run: |
+          openssl_archive="$RUNNER_TEMP/openssl-${OPENSSL_VERSION}.tar.gz"
+          curl --fail --location --retry 3 \
+            --output "$openssl_archive" \
+            "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz"
+          printf '%s  %s\n' "$OPENSSL_SHA256" "$openssl_archive" | sha256sum --check --strict
+          tar -xzf "$openssl_archive" -C "$RUNNER_TEMP"
+
+          # Required by VoAnyLib/native/build-openssl.sh.
+          export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/${NDK_VERSION}"
+          export OPENSSL_SRC="$RUNNER_TEMP/openssl-${OPENSSL_VERSION}"
+          bash VoAnyLib/native/build-openssl.sh
+
+          test -s VoAnyLib/src/main/jni/openssl/arm64-v8a/libcrypto.a
+          test -f VoAnyLib/src/main/jni/openssl/include/openssl/opensslv.h
+          test -f VoAnyLib/src/main/jni/openssl/Android.mk
+
+      - name: Build debug APK
+        run: ./gradlew :VoAnyApp:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: voany-debug-apk
+          path: VoAnyApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
