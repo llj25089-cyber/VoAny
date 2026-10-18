@@ -73,10 +73,27 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             make perl jq curl git ca-certificates
 
-      - name: Prepare pinned upstream sources
-        # These are not Git submodules. This script uses only Python's standard
-        # library, fetches upstream.lock.json revisions and applies the patch.
-        # OpenSSL must be built after this step and before Gradle's native build.
+      -       - name: Prepare pinned upstream sources
+        run: |
+          # 安装 strongSwan 生成构建文件所需的宿主机工具。
+          sudo apt-get install -y --no-install-recommends \
+            build-essential autoconf automake libtool pkg-config \
+            flex bison gperf libgmp-dev
+
+          python VoAnyLib/prepare-upstreams.py
+
+          # Git 检出需要生成 Android.common.mk、解析器和关键字表。
+          (
+            cd VoAnyLib/.upstream/strongswan
+            ./autogen.sh
+            ./configure
+            make dist
+          )
+
+          test -s VoAnyLib/.upstream/strongswan/Android.common.mk
+          test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/crypto/proposal/proposal_keywords_static.c
+          test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/settings/settings_parser.c
+          test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/settings/settings_lexer.c
         run: python VoAnyLib/prepare-upstreams.py
 
       - name: Build OpenSSL for Android arm64
