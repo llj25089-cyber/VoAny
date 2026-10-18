@@ -54,9 +54,18 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
+      
+      - name: Restore official Gradle 8.11.1 wrapper JAR
+        run: |
+          curl --fail --location --retry 3 \
+            --output gradle/wrapper/gradle-wrapper.jar \
+            "https://raw.githubusercontent.com/gradle/gradle/v8.11.1/gradle/wrapper/gradle-wrapper.jar"
+          printf '%s  %s\n' \
+            '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046' \
+            'gradle/wrapper/gradle-wrapper.jar' | sha256sum --check --strict
+
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
-
       - name: Install native build prerequisites
         # The upstream OpenSSL builder runs make/Perl directly, without Docker.
         run: |
