@@ -126,6 +126,22 @@ jobs:
             "$RUNNER_TEMP/voany-sms-v3/VoAny_SMS_receive_patch_v3/apply_sms_fix.py" \
             --repo "$GITHUB_WORKSPACE"
 
+      - name: Fix v3 status panel compilation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("VoAnyApp/src/main/java/li/power/app/voany/MainActivity.java")
+          text = path.read_text(encoding="utf-8")
+          old = "SmsReceiveDiagnostics.summary(this,VoAny.subscription())"
+          new = "SmsReceiveDiagnostics.summary(MainActivity.this,VoAny.subscription())"
+
+          if (text.count(old), text.count(new)) not in ((1, 0), (0, 1)):
+              raise SystemExit("Unexpected status panel source; no changes made")
+          if old in text:
+              path.write_text(text.replace(old, new), encoding="utf-8")
+          print("v3 status panel Context verified")
+
       - name: Build debug APK
         run: ./gradlew :VoAnyApp:assembleDebug --stacktrace
 
