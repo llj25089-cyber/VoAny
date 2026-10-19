@@ -26,8 +26,8 @@ public final class SmsCodec {
     }
     public static final class Deliver {
         public String sender,text;
-        public int concat=-1,total=1,index=1,dcs,reference=-1,status=-1;
-        public boolean wideReference,statusReport;
+        public int concat=-1,total=1,index=1,dcs,pid=-1,reference=-1,status=-1;
+        public boolean wideReference,statusReport,silent;
         public long timestamp;
     }
     private static final class Cursor {
@@ -139,8 +139,24 @@ public final class SmsCodec {
             if(c.at<c.data.length){int pi=c.get();if((pi&0x80)!=0)throw new IllegalArgumentException("Unsupported extended status report");if((pi&1)!=0)c.get();int coding=(pi&2)!=0 ? c.get() : 0;if((pi&4)!=0)readText(c,flags,coding,new Deliver());}
             c.end();return d;}
         if(type!=0)throw new IllegalArgumentException("Expected SMS-DELIVER or STATUS-REPORT");
-        d.sender=tpAddress(c);int pid=c.get();if(pid!=0)throw new IllegalArgumentException("Unsupported SMS protocol identifier");
-        d.dcs=c.get();d.timestamp=time(c);readText(c,flags,d.dcs,d);c.end();return d;
+        d.sender=tpAddress(c);d.pid=c.get();d.dcs=c.get();
+        try{
+            // TS 23.040 9.2.3.9: type 0 is acknowledged without displaying or storing it.
+            // Its user data is deliberately not interpreted, including binary payloads.
+            if(d.pid==0x40){c.take(7);c.get();d.silent=true;d.text="";return d;}
+            // These messages require device/SIM applications that this text inbox does not implement.
+            // A (U)SIM-download PID with a non-class-2 DCS is an ordinary message per 23.040.
+            if(d.pid==0x48 || d.pid==0x7c || d.pid==0x7d || d.pid==0x7e || (d.pid==0x7f && simClass(d.dcs)))
+                throw new IllegalArgumentException("Device/SIM application SMS not supported");
+            // Reserved, obsolete and unsupported text PIDs use normal text semantics.
+            // Optional replacement-message behavior is not implemented by this inbox.
+            d.timestamp=time(c);readText(c,flags,d.dcs,d);c.end();return d;
+        }catch(IllegalArgumentException e){
+            throw new IllegalArgumentException(String.format(Locale.ROOT,"%s / PID=0x%02X DCS=0x%02X",e.getMessage(),d.pid,d.dcs),e);
+        }
+    }
+    private static boolean simClass(int coding){
+        return (((coding&0xc0)==0 && (coding&0x10)!=0) || (coding&0xf0)==0xf0) && (coding&3)==2;
     }
     private static void readText(Cursor c,int flags,int coding,Deliver d){
         int alphabet;

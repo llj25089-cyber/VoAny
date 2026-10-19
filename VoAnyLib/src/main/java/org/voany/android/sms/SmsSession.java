@@ -100,7 +100,16 @@ public final class SmsSession implements Closeable {
             String target=fromUri(request.first("From"));byte[] response;long received=-1;
             try{
                 SmsCodec.Deliver deliver=SmsCodec.deliver(rp.tpdu);
-                if(deliver.statusReport)store.statusReport(subscription,deliver,rp.tpdu);else received=store.receive(subscription,deliver,rp.tpdu);
+                if(deliver.statusReport){
+                    Log.i("VoAnySms","MT SMS status report / status="+deliver.status);
+                    store.statusReport(subscription,deliver,rp.tpdu);
+                }else{
+                    Log.i("VoAnySms",String.format(Locale.ROOT,"MT SMS decoded / PID=0x%02X DCS=0x%02X / part %d of %d / %s",deliver.pid,deliver.dcs,deliver.index,deliver.total,deliver.silent ? "silent" : "text"));
+                    if(!deliver.silent){
+                        received=store.receive(subscription,deliver,rp.tpdu);
+                        Log.i("VoAnySms",received>=0 ? "MT SMS saved to inbox" : "MT SMS duplicate or multipart pending");
+                    }
+                }
                 response=SmsCodec.ack(rp.reference);
             }catch(IllegalArgumentException e){response=SmsCodec.error(rp.reference,95);Log.i("VoAnySms","MT TPDU rejected: "+e.getMessage());}
             // Persist before confirming reception. The SIP transaction and RP transaction are distinct.
