@@ -11,13 +11,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
     defaults:
       run:
         shell: bash
+
     env:
       NDK_VERSION: '27.1.12297006'
       OPENSSL_VERSION: '3.5.4'
-      # SHA-256 from the official OpenSSL 3.5.4 release checksum file.
       OPENSSL_SHA256: '967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99'
 
     steps:
@@ -42,7 +43,6 @@ jobs:
           packages: 'platform-tools'
 
       - name: Install Android SDK packages
-        # Keep 36.0.0 as requested; the existing AGP 8.9.2 defaults to 35.0.0.
         run: |
           sdkmanager --sdk_root="$ANDROID_HOME" --install \
             "platform-tools" \
@@ -54,20 +54,20 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      
       - name: Restore official Gradle 8.11.1 wrapper JAR
         run: |
           curl --fail --location --retry 3 \
             --output gradle/wrapper/gradle-wrapper.jar \
             "https://raw.githubusercontent.com/gradle/gradle/v8.11.1/gradle/wrapper/gradle-wrapper.jar"
+
           printf '%s  %s\n' \
             '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046' \
             'gradle/wrapper/gradle-wrapper.jar' | sha256sum --check --strict
 
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
+
       - name: Install native build prerequisites
-        # The upstream OpenSSL builder runs make/Perl directly, without Docker.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -75,14 +75,12 @@ jobs:
 
       - name: Prepare pinned upstream sources
         run: |
-          # 安装 strongSwan 生成构建文件所需的宿主机工具。
           sudo apt-get install -y --no-install-recommends \
             build-essential autoconf automake libtool pkg-config \
             flex bison gperf libgmp-dev
 
           python VoAnyLib/prepare-upstreams.py
 
-          # Git 检出需要生成 Android.common.mk、解析器和关键字表。
           (
             cd VoAnyLib/.upstream/strongswan
             ./autogen.sh
@@ -96,28 +94,38 @@ jobs:
           test -s VoAnyLib/.upstream/strongswan/src/libstrongswan/settings/settings_lexer.c
 
       - name: Build OpenSSL for Android arm64
-        # Static OpenSSL libraries/headers are excluded from version control.
-        # The repository wrapper sets arm64-v8a, MIN_SDK=31 and NO_DOCKER=1.
         run: |
           openssl_archive="$RUNNER_TEMP/openssl-${OPENSSL_VERSION}.tar.gz"
+
           curl --fail --location --retry 3 \
             --output "$openssl_archive" \
             "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz"
-          printf '%s  %s\n' "$OPENSSL_SHA256" "$openssl_archive" | sha256sum --check --strict
+
+          printf '%s  %s\n' \
+            "$OPENSSL_SHA256" \
+            "$openssl_archive" | sha256sum --check --strict
+
           tar -xzf "$openssl_archive" -C "$RUNNER_TEMP"
 
-          # Required by VoAnyLib/native/build-openssl.sh.
           export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk/${NDK_VERSION}"
           export OPENSSL_SRC="$RUNNER_TEMP/openssl-${OPENSSL_VERSION}"
+
           bash VoAnyLib/native/build-openssl.sh
 
           test -s VoAnyLib/src/main/jni/openssl/arm64-v8a/libcrypto.a
           test -f VoAnyLib/src/main/jni/openssl/include/openssl/opensslv.h
           test -f VoAnyLib/src/main/jni/openssl/Android.mk
+
       - name: Apply VoAny SMS receive patch v3
         run: |
-       unzip -q -o "$GITHUB_WORKSPACE/VoAny_SMS_receive_patch_v3.zip" -d "$RUNNER_TEMP/voany-sms-v3"
-       python3 "$RUNNER_TEMP/voany-sms-v3/VoAny_SMS_receive_patch_v3/apply_sms_fix.py" --repo "$GITHUB_WORKSPACE"
+          unzip -q -o \
+            "$GITHUB_WORKSPACE/VoAny_SMS_receive_patch_v3.zip" \
+            -d "$RUNNER_TEMP/voany-sms-v3"
+
+          python3 \
+            "$RUNNER_TEMP/voany-sms-v3/VoAny_SMS_receive_patch_v3/apply_sms_fix.py" \
+            --repo "$GITHUB_WORKSPACE"
+
       - name: Build debug APK
         run: ./gradlew :VoAnyApp:assembleDebug --stacktrace
 
